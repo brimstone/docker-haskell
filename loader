@@ -1,0 +1,48 @@
+#!/bin/sh
+
+set -ue
+
+[ -n "${VERBOSE:-}" ] && set -x
+
+if [ "$#" = 0 ]; then
+	echo "Assuming the working directory contains source files." >&2
+fi
+
+if [ -n "${TAR:-}" ]; then
+	mkdir /opt/work
+	cd /opt/work
+	tar -x >&2
+fi
+
+if [ ! -f stack.yaml ]; then
+	echo "== Missing required file: stack.yaml" >&2
+	exit 1
+fi
+output="app"
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-o)
+		shift
+		output="$1"
+		;;
+	esac
+	shift
+done
+
+(
+echo "== Building with cabal"
+# I want to use stack, but it doesn't work :(
+#stack --allow-different-user build -j4 --only-dependencies
+#stack --allow-different-user build -j4 --ghc-options "-static -optl-static -threaded -o \"$output\""
+
+set -x
+cabal update
+cabal install --only-dependencies --enable-tests
+cabal configure --enable-tests
+# First time is just for practice, and to build all of the object files we need
+cabal build
+cabal build --ghc-options "-static -optl-static -threaded -o \"$output\""
+strip "$output"
+)>&2
+
+[ -n "${TAR:-}" ] && tar -c .
